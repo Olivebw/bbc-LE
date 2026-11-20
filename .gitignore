@@ -1,0 +1,16 @@
+# WorkBuddy 工作区元数据与临时文件（不上传）
+.workbuddy/
+.verify/
+__pycache__/
+*.pyc
+.DS_Store
+Thumbs.db
+
+# 原始大体积 MP3（约 1.9G）：线上改用 audio/<year>/ 下的压缩版
+# 注意：只排除 mp3，PDF / MANIFEST.csv 仍会随仓库上传
+6-minute-english_*/*.mp3
+
+# 转码临时文件、日志与本地凭据副本
+*.tmp.mp3
+*.log
+.git-creds*

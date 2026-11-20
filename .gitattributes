@@ -1,0 +1,4 @@
+# 音频与 PDF 已是压缩格式，禁用 delta 与换行转换，避免 git 重复压缩
+*.mp3 -text -delta
+*.pdf -text -delta
+*.part -text
