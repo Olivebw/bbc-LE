@@ -13,6 +13,9 @@ BBC 6 Minute English 学习站 —— 一键 / 定时更新流水线
 日常使用：把新下载的 PDF / MP3 放进 6-minute-english_YYYY/ 目录，
 然后运行本脚本即可；无需手工改清单、无需手工压缩、无需手工推送。
 
+推送通道：默认原生 git push（github.com 直连，小增量包很快）；
+失败时自动回退 GitHub REST API（只依赖 api.github.com）。
+
 用法:
   python update_site.py               # 完整流水线
   python update_site.py --skip-fetch  # 跳过在线抓取（网络受限时更快）
@@ -21,7 +24,7 @@ BBC 6 Minute English 学习站 —— 一键 / 定时更新流水线
 环境变量:
   BBC_REMOTE       覆盖远端仓库地址，默认 https://github.com/Olivebw/bbc-LE.git
   GITHUB_TOKEN     推送凭据；未设置时读取 ~/.git-credentials
-  BBC_PUSH_METHOD  默认 api（走 REST API）；设为 git 则改回原生 git push
+  BBC_PUSH_METHOD  默认 git；设为 api 则强制只用 REST API
   BBC_HTTP_PROXY   仅 git 推送且必须走代理时设置
   BBC_PROXY / BBC_FEED_URL   供 fetch_new.py 抓取 BBC 使用
 """
@@ -46,10 +49,13 @@ def log(msg):
     print("[update] " + msg, flush=True)
 
 
-def run(cmd, env=None, check=False):
-    p = subprocess.run(cmd, cwd=ROOT, env=env, stdout=subprocess.PIPE,
-                       stderr=subprocess.PIPE, text=True,
-                       encoding="utf-8", errors="replace")
+def run(cmd, env=None, check=False, timeout=None):
+    try:
+        p = subprocess.run(cmd, cwd=ROOT, env=env, stdout=subprocess.PIPE,
+                           stderr=subprocess.PIPE, text=True,
+                           encoding="utf-8", errors="replace", timeout=timeout)
+    except subprocess.TimeoutExpired:
+        return None
     if check and p.returncode != 0:
         raise RuntimeError("%s 失败: %s" % (" ".join(cmd[:3]),
                                            (p.stderr or p.stdout).strip()[:500]))
@@ -59,6 +65,9 @@ def run(cmd, env=None, check=False):
 def run_step(label, script, extra=None):
     cmd = [sys.executable, os.path.join(ROOT, script)] + (extra or [])
     p = run(cmd)
+    if p is None:
+        log("%s 超时" % label)
+        return 1
     out = (p.stdout or "").strip()
     if out:
         for line in out.splitlines()[-14:]:
@@ -163,47 +172,52 @@ def load_token():
 
 
 def git_sync(added, meta):
-    """同步到 GitHub。
-
-    默认走 REST API（只依赖 api.github.com，稳定且天然增量）；
-    设置 BBC_PUSH_METHOD=git 可切回原生 git push（需 git 端点可达）。
-    """
+    """同步到 GitHub：默认 git push，失败自动回退 REST API。"""
     has_git = os.path.isdir(os.path.join(ROOT, ".git"))
     if has_git:
-        # 让新增文件进入索引，供 upload_via_api.py 用 git ls-files 取清单
         run(["git", "add", "-A"])
         st = run(["git", "status", "--porcelain"])
-        # API 推送按远端 tree 的 blob sha 对比，天然幂等：远端为空或滞后时，
-        # 本地 status 即便干净也仍需推送；真正无变化由 upload_via_api.py 输出 NO_CHANGE。
-        # 仅原生 git 方式沿用「本地无变更即跳过」的旧行为。
-        if (not st.stdout.strip()
-                and os.environ.get("BBC_PUSH_METHOD", "api").strip().lower() == "git"):
+        if (st is not None and not (st.stdout or "").strip()
+                and os.environ.get("BBC_PUSH_METHOD", "git").strip().lower() == "git"):
             log("无文件变更，跳过提交与推送")
             return False
     today = datetime.date.today().isoformat()
     msg = "Update %s: %d episodes, %d new" % (today, meta["total"], added)
 
-    if os.environ.get("BBC_PUSH_METHOD", "api").strip().lower() == "git":
-        ok = _push_via_git(msg)
-    else:
-        p = run([sys.executable, os.path.join(ROOT, "upload_via_api.py"),
-                 "--message", msg])
-        for line in (p.stdout or "").strip().splitlines()[-10:]:
-            print("    " + line)
-        if p.returncode != 0:
-            log("API 推送失败: " + (p.stderr or "").strip()[:300])
-            return False
-        ok = True
-        log("已通过 API 推送到 GitHub，Pages 将自动重新部署")
+    method = os.environ.get("BBC_PUSH_METHOD", "git").strip().lower()
+    if method == "api":
+        return _push_via_api(msg)
 
-    if ok and has_git:
-        # 本地留一条记录；远端 commit 由 API 创建，不依赖本地历史
-        run(["git", "commit", "-m", msg])
+    # 先本地提交，保持本地与远端历史一致
+    if has_git:
+        c = run(["git", "commit", "-m", msg])
+        if c is None or c.returncode != 0:
+            log("本地提交失败或跳过: " + ((c.stderr if c else "timeout") or "").strip()[:200])
+    ok = _push_via_git(msg)
+    if not ok:
+        log("git push 失败，自动回退 REST API 推送")
+        ok = _push_via_api(msg)
     return ok
 
 
+def _push_via_api(msg):
+    """GitHub REST API 增量推送（按 blob sha 对比，只上传变化文件）。"""
+    p = run([sys.executable, os.path.join(ROOT, "upload_via_api.py"),
+             "--message", msg])
+    if p is None:
+        log("API 推送超时")
+        return False
+    for line in (p.stdout or "").strip().splitlines()[-10:]:
+        print("    " + line)
+    if p.returncode != 0:
+        log("API 推送失败: " + (p.stderr or "").strip()[:300])
+        return False
+    log("已通过 API 推送到 GitHub，Pages 将自动重新部署")
+    return True
+
+
 def _push_via_git(msg):
-    """原生 git push，仅在 github.com 的 git 端点可达时使用。"""
+    """原生 git push（github.com 直连，禁用代理与 credential helper）。"""
     tok = load_token()
     if not tok:
         log("未找到 GitHub 凭据")
@@ -223,7 +237,11 @@ def _push_via_git(msg):
         proxy_flags = ["-c", "http.proxy=", "-c", "https.proxy="]
     env["GIT_TERMINAL_PROMPT"] = "0"
     p = run(["git", "-c", "credential.helper="] + proxy_flags +
-            ["push", push_url, "HEAD:refs/heads/" + BRANCH], env=env)
+            ["push", push_url, "HEAD:refs/heads/" + BRANCH],
+            env=env, timeout=180)
+    if p is None:
+        log("git push 超时")
+        return False
     if p.returncode != 0:
         log("git push 失败: " + (p.stderr or "").strip()[:300])
         return False
