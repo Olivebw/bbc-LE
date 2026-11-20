@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="description" content="BBC 6 Minute English 个人学习库：音频跟读、分角色文稿、词汇自测与学习进度。">
+<title>BBC 6 Minute English · 学习库</title>
+<link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="wrap topbar-inner">
+    <a class="brand" href="#/" aria-label="返回课程库">
+      <span class="brand-mark">BBC</span>
+      <span class="brand-text">6 Minute English<small>学习库</small></span>
+    </a>
+    <nav class="nav" id="nav">
+      <a href="#/" data-nav="library">课程库</a>
+      <a href="#/vocab" data-nav="vocab">词汇本</a>
+      <a href="#/stats" data-nav="stats">学习进度</a>
+    </nav>
+    <div class="topbar-status" id="topStatus"></div>
+  </div>
+</header>
+
+<main id="app" class="wrap"></main>
+
+<footer class="footer">
+  <div class="wrap">
+    <span>BBC Learning English · 6 Minute English 学习库</span>
+    <span>资料仅供个人学习使用 · 音频与文稿版权归 BBC 所有</span>
+  </div>
+</footer>
+
+<!-- 全局音频播放器 -->
+<div class="dock hidden" id="dock">
+  <audio id="audioEl" preload="metadata"></audio>
+  <div class="wrap dock-inner">
+    <div class="dock-info">
+      <span class="dock-label">正在播放</span>
+      <a id="dockTitle" href="#/"></a>
+    </div>
+    <div class="dock-controls">
+      <button class="icon-btn" id="btnBack" title="后退 15 秒" aria-label="后退 15 秒">
+        <svg viewBox="0 0 24 24"><path d="M12 5V1L7 6l5 5V7a6 6 0 1 1-6 6H4a8 8 0 1 0 8-8z"/><text x="12" y="16" text-anchor="middle" font-size="8" font-family="Arial">15</text></svg>
+      </button>
+      <button class="play-btn" id="btnPlay" title="播放 / 暂停" aria-label="播放或暂停">
+        <svg id="iconPlay" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+        <svg id="iconPause" class="hidden" viewBox="0 0 24 24"><path d="M6 5h4v14H6zm8 0h4v14h-4z"/></svg>
+      </button>
+      <button class="icon-btn" id="btnFwd" title="前进 15 秒" aria-label="前进 15 秒">
+        <svg viewBox="0 0 24 24"><path d="M12 5V1l5 5-5 5V7a6 6 0 1 0 6 6h2a8 8 0 1 1-8-8z"/><text x="12" y="16" text-anchor="middle" font-size="8" font-family="Arial">15</text></svg>
+      </button>
+    </div>
+    <div class="dock-seek">
+      <span class="time" id="timeNow">0:00</span>
+      <input type="range" id="seek" min="0" max="100" value="0" step="0.1" aria-label="播放进度">
+      <span class="time" id="timeTotal">0:00</span>
+    </div>
+    <div class="dock-extra">
+      <button class="rate-btn" id="btnRate" title="切换播放速度">1.0x</button>
+      <button class="icon-btn dock-close" id="btnCloseDock" title="关闭播放器" aria-label="关闭播放器">
+        <svg viewBox="0 0 24 24"><path d="M18.3 5.7 12 12l6.3 6.3-1.4 1.4L12 14.8l-6.3 6.3-1.4-1.4L10.6 12 4.3 5.7l1.4-1.4L12 9.2l6.3-4.9z"/></svg>
+      </button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<div class="dict-pop hidden" id="dictPop"></div>
+
+<script src="data/episodes.js"></script>
+<script src="assets/app.js"></script>
+</body>
+</html>
